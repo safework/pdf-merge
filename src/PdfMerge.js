@@ -13,38 +13,38 @@ import shellescape from 'shell-escape'
  */
 class PDFMerge {
 	constructor(pdfFiles, pdftkPath){
-		if(!_(pdfFiles).isArray() || pdfFiles.length === 0) {
-			throw new Error('pdfFiles must be an array of absolute file paths.');
+		if(!Array.isArray(pdfFiles) || pdfFiles.length === 0) {
+			throw new Error('pdfFiles must be an array of absolute file paths.')
 		}
 
 		//Windows: Demand path to lib
 		if(isWindowsPlatform()) {
-			this.exec = child.execFile;
+			this.exec = child.execFile
 			if(!pdftkPath || !fs.existsSync(pdftkPath)) {
-				throw new Error('Path to PDFtk is incorrect.');
+				throw new Error('Path to PDFtk is incorrect.')
 			}
-			this.pdftkPath = pdftkPath;
-			this.isWin     = true;
+			this.pdftkPath = pdftkPath
+			this.isWin = true
 		} else {
-			this.exec = child.exec;
+			this.exec = child.exec
 		}
 
 		//Array of files
-		this.pdfFiles = pdfFiles;
+		this.pdfFiles = pdfFiles
 
 		//Get an available temporary filePath to be used in PDFtk
-		this.tmpFilePath = tmp.tmpNameSync();
+		this.tmpFilePath = tmp.tmpNameSync()
 
 		//Setup Arguments to be used when calling PDFtk
-		this.execArgs = this.assembleExecArgs(this);
+		this.execArgs = this.assembleExecArgs(this)
 
-		//Default Mode 'BUFFER';
-		this.mode = 'BUFFER';
+		//Default Mode 'BUFFER'
+		this.mode = 'BUFFER'
 
 		//Default dont keep the temporary file
-		this.keepTmpFile = false;
+		this.keepTmpFile = false
 
-		return this;
+		return this
 	}
 
 	/**
@@ -64,8 +64,8 @@ class PDFMerge {
 	 * @returns {PDFMerge}
 	 */
 	asBuffer() {
-		this.mode = 'BUFFER';
-		return this;
+		this.mode = 'BUFFER'
+		return this
 	}
 
 	/**
@@ -73,8 +73,8 @@ class PDFMerge {
 	 * @returns {PDFMerge}
 	 */
 	asReadStream() {
-		this.mode = 'READSTREAM';
-		return this;
+		this.mode = 'READSTREAM'
+		return this
 	}
 
 	/**
@@ -82,9 +82,9 @@ class PDFMerge {
 	 * @param path
 	 */
 	asNewFile(path) {
-		this.mode        = 'NEWFILE';
-		this.newFilePath = path;
-		return this;
+		this.mode = 'NEWFILE'
+		this.newFilePath = path
+		return this
 	}
 
 
@@ -92,8 +92,8 @@ class PDFMerge {
 	 * Tells PDFMerge to keep the temporary PDF file created by 'merge'
 	 */
 	keepTmpFile() {
-		this.keepTmpFile = true;
-		return true;
+		this.keepTmpFile = true
+		return true
 	}
 
 	/**
@@ -115,16 +115,18 @@ class PDFMerge {
 	 * @param callback
 	 */
 	merge(callback) {
-		var mode        = this.mode;
-		var keepTmpFile = this.keepTmpFile; //Keep the Tmp File?
-		var tmpFilePath = this.tmpFilePath; //Filepath for PDF file being created by PDFtk
-		var newFilePath = this.newFilePath; //MODE === 'NEWFILE'
+		const {
+			mode,
+			keepTmpFile,
+			tmpFilePath,
+			newFilePath
+		} = this
 
 		//Windows or not, different syntax
 		if(this.isWin) {
 			this.exec(this.pdftkPath, this.execArgs, execCallbackHandler)
 		} else {
-			this.exec('pdftk ' + this.execArgs.join(' '), execCallbackHandler);
+			this.exec('pdftk ' + this.execArgs.join(' '), execCallbackHandler)
 		}
 
 		/**
@@ -132,9 +134,9 @@ class PDFMerge {
 		 * @param error
 		 * @returns {*}
 		 */
-		function execCallbackHandler(error) {
+		function execCallbackHandler(error, stdout, stderr) {
 			if(error) {
-				return callback(error);
+				return callback(error)
 			}
 
 			/**
@@ -144,18 +146,18 @@ class PDFMerge {
 			if(mode === 'BUFFER' || mode === 'NEWFILE') {
 				fs.readFile(tmpFilePath, function(error, buffer) {
 					if(error) {
-						return callback(error);
+						return callback(error)
 					}
-					deleteFile();
+					deleteFile()
 
 					if(mode !== 'NEWFILE') {
-						return callback(null, buffer);
+						return callback(null, buffer)
 					}
 
 					fs.writeFile(newFilePath, buffer, function(error) {
-						return callback(error, newFilePath);
+						return callback(error, newFilePath)
 					})
-				});
+				})
 			} else if(mode === 'READSTREAM') {
 				var readStream = fs.createReadStream(tmpFilePath);
 				callback(null, readStream);
@@ -171,7 +173,7 @@ class PDFMerge {
 		 */
 		function deleteFile() {
 			if(!keepTmpFile) {
-				fs.unlink(tmpFilePath, function() {});
+				fs.unlink(tmpFilePath, function() {})
 			}
 		}
 	}
@@ -183,7 +185,15 @@ class PDFMerge {
  * @returns {boolean}
  */
 function isWindowsPlatform() {
-	return os.type().indexOf('Windows') !== -1;
+	return os.type().indexOf('Windows') !== -1
+}
+
+/**
+ * Escapes path if not windos
+ * @returns {string}
+ */
+function escapePath(path) {
+	return isWindowsPlatform() ? tmpFilePath : shellescape([tmpFilePath])
 }
 
 export default PDFMerge
