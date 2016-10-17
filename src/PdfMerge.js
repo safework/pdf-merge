@@ -52,9 +52,12 @@ class PDFMerge {
 	 * @returns {*}
 	 */
 	assembleExecArgs() {
-		const { tmpFilePath } = this,
-			execArgs = this.pdfFiles.map(file => this.isWin ? file : shellescape([file]))
-		execArgs.push('cat', 'output', this.isWin ? tmpFilePath : shellescape([tmpFilePath]))
+		const { mode, tmpFilePath } = this,
+			isStream = mode === 'READSTREAM',
+			execArgs = this.pdfFiles.map(escapePath)
+		execArgs.push('cat')
+		execArgs.push('output', isStream ? '-' : escapePath(tmpFilePath))
+
 		return execArgs
 	}
 
@@ -159,11 +162,7 @@ class PDFMerge {
 					})
 				})
 			} else if(mode === 'READSTREAM') {
-				var readStream = fs.createReadStream(tmpFilePath);
-				callback(null, readStream);
-				readStream.on('end', function() {
-					deleteFile();
-				});
+				callback(null, stdout)
 			}
 		}
 
