@@ -151,7 +151,7 @@ class PDFMerge {
 					if(error) {
 						return callback(error)
 					}
-					deleteFile()
+					deleteFile(tmpFilePath)
 
 					if(mode !== 'NEWFILE') {
 						return callback(null, buffer)
@@ -170,7 +170,7 @@ class PDFMerge {
 		 * Cleanup the temporary file created through PDFtk.
 		 * Don't cleanup if keepTmpFile === true
 		 */
-		function deleteFile() {
+		function deleteFile(tmpFilePath) {
 			if(!keepTmpFile) {
 				fs.unlink(tmpFilePath, function() {})
 			}
@@ -192,7 +192,7 @@ function isWindowsPlatform() {
  * @returns {string}
  */
 function escapePath(path) {
-	return isWindowsPlatform() ? tmpFilePath : shellescape([tmpFilePath])
+	return isWindowsPlatform() ? path : shellescape([path])
 }
 
 export default PDFMerge
