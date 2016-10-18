@@ -1,198 +1,28 @@
-import tmp from 'tmp'
-import os from 'os'
-import child from 'child_process'
-import fs from 'fs'
-import shellescape from 'shell-escape'
+import debug from 'debug'
+import { spawn, exec } from 'child_process'
 
-/**
- * Return a new instance of PDFMerge
- * @param pdfFiles
- * @param pdftkPath
- * @returns {PDFMerge}
- * @constructor
- */
-class PDFMerge {
-	constructor(pdfFiles, pdftkPath){
-		if(!Array.isArray(pdfFiles) || pdfFiles.length === 0) {
-			throw new Error('pdfFiles must be an array of absolute file paths.')
-		}
+const log = debug('pdf-merge')
 
-		//Windows: Demand path to lib
-		if(isWindowsPlatform()) {
-			this.exec = child.execFile
-			if(!pdftkPath || !fs.existsSync(pdftkPath)) {
-				throw new Error('Path to PDFtk is incorrect.')
-			}
-			this.pdftkPath = pdftkPath
-			this.isWin = true
-		} else {
-			this.exec = child.exec
-		}
+export function merge(pdfFiles) {
 
-		//Array of files
-		this.pdfFiles = pdfFiles
-
-		//Get an available temporary filePath to be used in PDFtk
-		this.tmpFilePath = tmp.tmpNameSync()
-
-		//Setup Arguments to be used when calling PDFtk
-		this.execArgs = this.assembleExecArgs(this)
-
-		//Default Mode 'BUFFER'
-		this.mode = 'BUFFER'
-
-		//Default dont keep the temporary file
-		this.keepTmpFile = false
-
-		return this
+	if(!Array.isArray(pdfFiles) || pdfFiles.length === 0) {
+		throw new Error('pdfFiles must be an array of absolute file paths.')
 	}
 
-	/**
-	 * Arguments for running PDFtk
-	 * @returns {*}
-	 */
-	assembleExecArgs() {
-		const { mode, tmpFilePath } = this,
-			isStream = mode === 'READSTREAM',
-			execArgs = this.pdfFiles.map(escapePath)
-		execArgs.push('cat')
-		execArgs.push('output', isStream ? '-' : escapePath(tmpFilePath))
+	const pdftk = spawn( 'pdftk', [...pdfFiles, 'cat', 'output', '-'] )
 
-		return execArgs
-	}
-
-
-	/**
-	 * Tells PDFMerge that we want a Buffer as our end result.
-	 * @returns {PDFMerge}
-	 */
-	asBuffer() {
-		this.mode = 'BUFFER'
-		return this
-	}
-
-	/**
-	 * Tells PDFMerge that we want a ReadStream as our end result.
-	 * @returns {PDFMerge}
-	 */
-	asReadStream() {
-		this.mode = 'READSTREAM'
-		return this
-	}
-
-	/**
-	 * Tells PDFMerge that we wish to store the merged PDF file as a new File, at given path.
-	 * @param path
-	 */
-	asNewFile(path) {
-		this.mode = 'NEWFILE'
-		this.newFilePath = path
-		return this
-	}
-
-
-	/**
-	 * Tells PDFMerge to keep the temporary PDF file created by 'merge'
-	 */
-	keepTmpFile() {
-		this.keepTmpFile = true
-		return true
-	}
-
-	/**
-	 * Run PDFMerge as a promise.
-	 */
-	promise() {
-		return new Promise((resolve, reject) => {
-			this.merge(function(error, result) {
-				if (error) {
-					return reject(error)
+	const monitorInt = setInterval(() => {
+		if (pdftk) {
+			exec(`ps -p ${pdftk.pid} -o vsize=`, (err, stdout, stderr) => {
+				if (err || stderr) {
+					return log('error getting memory usage:', err || stderr)
 				}
-				resolve(result)
+				log('memory usage:', parseInt(stdout, 10)/1024, 'Mb')
 			})
-		})
-	}
-
-	/**
-	 * Main function that runs the PDFtk merge command.
-	 * @param callback
-	 */
-	merge(callback) {
-		const {
-			mode,
-			keepTmpFile,
-			tmpFilePath,
-			newFilePath
-		} = this
-
-		//Windows or not, different syntax
-		if(this.isWin) {
-			this.exec(this.pdftkPath, this.execArgs, execCallbackHandler)
-		} else {
-			this.exec('pdftk ' + this.execArgs.join(' '), execCallbackHandler)
 		}
+	}, 100)
 
-		/**
-		 * ErrorHandler for when PDFtk has been executed.
-		 * @param error
-		 * @returns {*}
-		 */
-		function execCallbackHandler(error, stdout, stderr) {
-			if(error) {
-				return callback(error)
-			}
+	pdftk.on('exit', () => clearInterval(monitorInt))
 
-			/**
-			 * BUFFER/NEWFILE processed the same way.
-			 * For NEWFILE, it stores the buffer in a new file.
-			 */
-			if(mode === 'BUFFER' || mode === 'NEWFILE') {
-				fs.readFile(tmpFilePath, function(error, buffer) {
-					if(error) {
-						return callback(error)
-					}
-					deleteFile(tmpFilePath)
-
-					if(mode !== 'NEWFILE') {
-						return callback(null, buffer)
-					}
-
-					fs.writeFile(newFilePath, buffer, function(error) {
-						return callback(error, newFilePath)
-					})
-				})
-			} else if(mode === 'READSTREAM') {
-				callback(null, stdout)
-			}
-		}
-
-		/**
-		 * Cleanup the temporary file created through PDFtk.
-		 * Don't cleanup if keepTmpFile === true
-		 */
-		function deleteFile(tmpFilePath) {
-			if(!keepTmpFile) {
-				fs.unlink(tmpFilePath, function() {})
-			}
-		}
-	}
-
+	return pdftk.stdout
 }
-
-/**
- * Windows or not?
- * @returns {boolean}
- */
-function isWindowsPlatform() {
-	return os.type().indexOf('Windows') !== -1
-}
-
-/**
- * Escapes path if not windos
- * @returns {string}
- */
-function escapePath(path) {
-	return isWindowsPlatform() ? path : shellescape([path])
-}
-
-export default PDFMerge

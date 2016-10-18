@@ -19,9 +19,11 @@
   },
   "homepage": "https://github.com/wubzz/pdf-merge",
   "scripts": {
-    "build": "babel src -d lib"
+    "build": "babel src -d lib",
+    "test": "DEBUG=pdf-merge babel-node test"
   },
   "dependencies": {
+    "debug": "^2.2.0",
     "shell-escape": "^0.2.0",
     "tmp": "0.0.26"
   },
